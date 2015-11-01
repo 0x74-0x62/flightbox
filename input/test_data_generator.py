@@ -24,7 +24,7 @@ class TestDataGenerator(InputModule):
         while True:
             try:
                 # get new item from data hub
-                data_hub_item = DataHubItem('dummy', 'dummy data 12345')
+                data_hub_item = DataHubItem('test', 'test_data_1234567890')
 
                 self._logger.debug('Genereated dummy data ' + str(data_hub_item))
 
@@ -34,5 +34,9 @@ class TestDataGenerator(InputModule):
                 time.sleep(5)
 
             except(KeyboardInterrupt, SystemExit):
-                self._logger.info('Terminating')
                 break
+
+        # close data hub queue
+        self._data_hub.close()
+
+        self._logger.info('Terminating')

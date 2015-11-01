@@ -1,5 +1,5 @@
 import logging
-from multiprocessing import Process
+from multiprocessing import Process, Queue
 
 from data_hub.data_hub_item import DataHubItem
 
@@ -20,6 +20,9 @@ class DataHubWorker(Process):
         # set data hub queue
         self._data_hub = data_hub
 
+        # initialize output modules
+        self._output_modules = []
+
     def run(self):
         self._logger.info('Running')
 
@@ -39,5 +42,29 @@ class DataHubWorker(Process):
                     self._logger.warning('Dropping data (wrong data type)')
 
             except(KeyboardInterrupt, SystemExit):
-                self._logger.info('Terminating')
                 break
+
+        # close data hub queue
+        self._data_hub.close()
+
+        # terminate output modules and close queues
+        for output_module in self._output_modules:
+            # send poison pill to output module
+            output_module['queue'].put(None)
+
+            # close queue
+            output_module['queue'].close()
+
+        self._logger.info('Terminating')
+
+    def add_output_module(self, output_module):
+        # generate new queue for inter-process communication
+        queue = Queue()
+
+        # tell output module about queue
+        output_module.set_data_input_queue(queue)
+
+        # add module to internal list
+        self._output_modules.append({'output_module': output_module, 'queue': queue, 'content_types': output_module.get_desired_content_types()})
+
+        self._logger.debug('Output module added: ' + str(self._output_modules[-1]))

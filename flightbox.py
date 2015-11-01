@@ -6,9 +6,12 @@ import argparse
 import logging
 import logging.handlers
 from multiprocessing import Queue
+import multiprocessing.util
+import time
 
 from data_hub.data_hub_worker import DataHubWorker
-from input.test_data import TestDataGenerator
+from input.test_data_generator import TestDataGenerator
+from output.air_connect_output import AirConnectOutput
 
 __author__ = "Thorsten Biermann"
 __copyright__ = "Copyright 2015, Thorsten Biermann"
@@ -27,6 +30,9 @@ def flightbox_init():
     global logging_thread
     global flightbox_logger
 
+    # enable debug logging for multiprocessing
+    # multiprocessing.util.log_to_stderr(level=logging.DEBUG)
+
     # instantiate logging queue (used for inter-process communication)
     logging_queue = Queue()
 
@@ -34,7 +40,7 @@ def flightbox_init():
 
     # create formatter
     logging_formatter = logging.Formatter(
-        '%(asctime)s %(processName)-25s %(threadName)-15s %(name)-15s %(levelname)-8s %(message)s')
+        '%(asctime)s %(processName)-25s %(threadName)-15s %(name)-20s %(levelname)-8s %(message)s')
 
     # create file handler
     logging_file_handler = logging.FileHandler(args.log_file)
@@ -82,22 +88,34 @@ def flightbox_main():
         # TODO add main processing
         data_hub = Queue()
 
-        jobs = []
+        processes = []
 
         data_hub_worker = DataHubWorker(data_hub)
-        jobs.append(data_hub_worker)
-        data_hub_worker.start()
+        processes.append(data_hub_worker)
 
         test_data_generator = TestDataGenerator(data_hub)
-        jobs.append(test_data_generator)
-        test_data_generator.start()
+        processes.append(test_data_generator)
 
-        # wait for all jobs to finish
-        for job in jobs:
-            job.join()
+        air_connect_output = AirConnectOutput()
+        data_hub_worker.add_output_module(air_connect_output)
+        processes.append(air_connect_output)
+
+        # processes need to be started after configuration, as they are executed in separate processes
+        data_hub_worker.start()
+        time.sleep(1)
+        test_data_generator.start()
+        time.sleep(1)
+        air_connect_output.start()
+        time.sleep(1)
+
+        # wait for data_hub_worker to finish
+        data_hub_worker.join()
 
     except(KeyboardInterrupt, SystemExit):
-        pass
+        # wait for all processes to finish
+        for process in processes:
+            flightbox_logger.debug('Waiting for process ' + process.name + ' to terminate')
+            process.join()
 
 
 # flightbox cleanup procedure
@@ -108,17 +126,13 @@ def flightbox_cleanup():
     global data_hub
     global data_hub_worker
 
-    # check if data hub worker is still alive
-    if data_hub_worker is not None and data_hub_worker.is_alive():
-        # send poison pill to terminate DataHubWorker
-        data_hub.put(None)
-
-        # wait for DataHubWorker to terminate
-        data_hub_worker.join()
-
     # terminate logging thread
     flightbox_logger.info('Terminating logging thread')
     logging_thread.stop()
+
+    # close all queues
+    data_hub.close()
+    logging_queue.close()
 
 
 # call main flightbox function in case script is executed directly
