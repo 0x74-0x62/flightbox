@@ -34,9 +34,9 @@ class DataHubWorker(Process):
                     break
 
                 if type(data_hub_item) is DataHubItem:
-                    self._logger.info('Received ' + data_hub_item.get_content_type() + ' data')
+                    self._logger.debug('Received ' + str(data_hub_item))
                 else:
-                    self._logger.error('Dropping data (wrong data type)')
+                    self._logger.warning('Dropping data (wrong data type)')
 
             except(KeyboardInterrupt, SystemExit):
                 self._logger.info('Terminating')

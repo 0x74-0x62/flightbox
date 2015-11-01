@@ -12,6 +12,9 @@ class DataHubItem(object):
         self.__content_type = content_type
         self.__content_data = content_data
 
+    def __str__(self):
+        return '(' + self.__content_type + ') "' + self.__content_data + '"'
+
     def get_content_type(self):
         return self.__content_type
 

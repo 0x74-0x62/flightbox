@@ -8,6 +8,7 @@ import logging.handlers
 from multiprocessing import Queue
 
 from data_hub.data_hub_worker import DataHubWorker
+from input.test_data import TestDataGenerator
 
 __author__ = "Thorsten Biermann"
 __copyright__ = "Copyright 2015, Thorsten Biermann"
@@ -33,7 +34,7 @@ def flightbox_init():
 
     # create formatter
     logging_formatter = logging.Formatter(
-        '%(asctime)s %(processName)-15s %(threadName)-15s %(name)-15s %(levelname)-8s %(message)s')
+        '%(asctime)s %(processName)-25s %(threadName)-15s %(name)-15s %(levelname)-8s %(message)s')
 
     # create file handler
     logging_file_handler = logging.FileHandler(args.log_file)
@@ -87,7 +88,13 @@ def flightbox_main():
         jobs.append(data_hub_worker)
         data_hub_worker.start()
 
-        data_hub_worker.join()
+        test_data_generator = TestDataGenerator(data_hub)
+        jobs.append(test_data_generator)
+        test_data_generator.start()
+
+        # wait for all jobs to finish
+        for job in jobs:
+            job.join()
 
     except(KeyboardInterrupt, SystemExit):
         pass
