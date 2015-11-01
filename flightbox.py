@@ -8,14 +8,13 @@ __email__ = "thorsten.biermann@gmail.com"
 
 import argparse
 import daemon
+import daemon.pidfile
 import logging
-import logging.config
 import logging.handlers
 from multiprocessing import Process, Queue
 import os
 import signal
 import sys
-import threading
 
 arg_parser = argparse.ArgumentParser(description='FlightBox collects input from various devices, like GNSS, ADS-B, and combines them in one NMEA stream.')
 arg_parser.add_argument('--daemon', dest='daemon', action='store_true', help='start in daemonized mode (background)')
@@ -40,57 +39,52 @@ def flightbox_init():
     # instantiate logging queue (used for inter-process communication)
     logging_queue = Queue()
 
-    # create configuration dict for logging
-    logging_config = {
-        'version': 1,
-        'formatters': {
-            'detailed': {
-                'class': 'logging.Formatter',
-                'format': '%(asctime)s %(processName)-15s %(name)-15s %(levelname)-8s %(message)s'
-            }
-        },
-        'handlers': {
-            'console': {
-                'class': 'logging.StreamHandler',
-                'level': 'DEBUG',
-                'formatter': 'detailed',
-            },
-            'file': {
-                'class': 'logging.FileHandler',
-                'filename': args.log_file,
-                'mode': 'w',
-                'level': 'DEBUG',
-                'formatter': 'detailed',
-            },
-        },
-        'root': {
-            'level': 'DEBUG',
-            'handlers': ['console', 'file']
-        },
-    }
+    """ set up receiving side of logging framework """
 
-    # apply logging configuration
-    logging.config.dictConfig(logging_config)
+    # create formatter
+    logging_formatter = logging.Formatter(
+        '%(asctime)s %(processName)-15s %(threadName)-15s %(name)-15s %(levelname)-8s %(message)s')
 
-    logging_thread = threading.Thread(target=flightbox_logging_thread, args=(logging_queue,))
-    logging_thread.start()
+    # create file handler
+    logging_file_handler = logging.FileHandler(args.log_file)
+    logging_file_handler.setLevel(logging.DEBUG)
+    logging_file_handler.setFormatter(logging_formatter)
 
-    # set up main flightbox logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(logging.DEBUG)
-    flightbox_logger = logging.getLogger('FlightBox')
+    # create console handler
+    logging_stream_handler = logging.StreamHandler()
+    logging_stream_handler.setLevel(logging.DEBUG)
+    logging_stream_handler.setFormatter(logging_formatter)
 
     # store logging streams (required for later protection when going into daemon mode)
-    logging_file_handles = []
-    for handler in root_logger.handlers:
-        if type(handler) is logging.StreamHandler or type(handler) is logging.FileHandler:
-            logging_file_handles.append(handler.stream.fileno())
+    logging_file_handles = [logging_file_handler.stream.fileno(), logging_stream_handler.stream.fileno()]
+
+    # start logging thread
+    logging_thread = logging.handlers.QueueListener(logging_queue, logging_file_handler, logging_stream_handler)
+    logging_thread.start()
+
+    """ set up sending side of logging framework """
+
+    # create queue handler
+    logging_queue_handler = logging.handlers.QueueHandler(logging_queue)
+
+    # configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(logging_queue_handler)
+
+    """ set up logger for main FlightBox logging """
+
+    # create flightbox logger
+    flightbox_logger = logging.getLogger('FlightBox')
+
+    flightbox_logger.info('Started logging framework')
 
 
 # main function
 def flightbox_main():
     global args
     global flightbox_logger
+    global logging_queue
 
     flightbox_logger.info('Entering main procedure')
 
@@ -101,8 +95,6 @@ def flightbox_main():
     except(KeyboardInterrupt, SystemExit):
         pass
 
-    flightbox_cleanup()
-
 
 # flightbox cleanup procedure
 def flightbox_cleanup():
@@ -110,35 +102,24 @@ def flightbox_cleanup():
     global logging_thread
     global flightbox_logger
 
-    flightbox_logger.info('Stopping logging thread')
+    flightbox_logger.info('Terminating logging thread')
 
-    # hand over poison pill to logging thread
-    logging_queue.put(None)
-    # wait for logging thread to terminate
-    logging_thread.join()
-
-
-# thread function that handles log messages from all processes
-def flightbox_logging_thread(logging_queue):
-    while True:
-        # get log record from queue
-        logging_record = logging_queue.get()
-
-        print('Processing queue record')
-
-        # terminate when poison pill None is found in queue
-        if logging_record is None:
-            break
-
-        # handle log record
-        logger = logging.getLogger(logging_record.name)
-        logger.handle(logging_record)
+    # terminate logging thread
+    logging_thread.stop()
 
 
 # call main flightbox function in case script is executed directly
 if __name__ == "__main__":
+    # initialize global variables
+    logging_queue = None
+    logging_thread = None
+    flightbox_logger = None
+    logging_file_handles = None
+
+    # initialize framework
     flightbox_init()
 
+    # check if daemon shall be terminated
     if args.kill_daemon:
         flightbox_logger.info('Trying to terminate existing daemon process')
         try:
@@ -152,29 +133,32 @@ if __name__ == "__main__":
             flightbox_logger.error('Unable to read PID from ' + args.pid_file)
             flightbox_logger.exception(sys.exc_info()[0])
 
-        sys.exit(0)
+    else:
+        # check if background start is requested
+        if args.daemon:
+            flightbox_logger.info('Starting in daemon mode')
 
-    if args.daemon:
-        flightbox_logger.info('Starting in daemon mode')
-
-        context = daemon.DaemonContext(
-            working_directory='/tmp',
-            umask=0o022,
-            pidfile=daemon.pidfile.PIDLockFile(args.pid_file),
+            context = daemon.DaemonContext(
+                working_directory='/tmp',
+                umask=0o022,
+                pidfile=daemon.pidfile.PIDLockFile(args.pid_file),
             )
 
-        # keep log file open during daemon start
-        context.files_preserve = logging_file_handles
+            # keep log file open during daemon start
+            context.files_preserve = logging_file_handles
 
-        context.signal_map = {
-            signal.SIGTERM: flightbox_cleanup,
-            signal.SIGHUP: flightbox_cleanup,
+            context.signal_map = {
+                signal.SIGTERM: flightbox_cleanup,
+                signal.SIGHUP: flightbox_cleanup,
             }
 
-        # start daemonized in background
-        with context:
+            # start daemonized in background
+            with context:
+                flightbox_main()
+
+        else:
+            # start normally in foreground
             flightbox_main()
 
-    else:
-        # start normally in foreground
-        flightbox_main()
+    # clean up framework
+    flightbox_cleanup()
