@@ -1,5 +1,6 @@
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 import logging
-import time
 
 from data_hub.data_hub_item import DataHubItem
 from output.output_module import OutputModule
@@ -7,6 +8,27 @@ from output.output_module import OutputModule
 __author__ = "Thorsten Biermann"
 __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
+
+
+async def input_processor(loop, data_input_queue):
+    logger = logging.getLogger('AirConnectOutput.InputProcessor')
+
+    while True:
+        # get executor that can run in the background (and is asyncio-enabled)
+        executor = ThreadPoolExecutor()
+
+        # get new item from data hub
+        data_hub_item = await loop.run_in_executor(executor, data_input_queue.get)
+
+        # check if item is a poison pill
+        if data_hub_item is None:
+            logger.debug('Received poison pill')
+
+            # exit loop
+            break
+
+        if type(data_hub_item) is DataHubItem:
+            logger.debug('Received ' + str(data_hub_item))
 
 
 class AirConnectOutput(OutputModule):
@@ -21,23 +43,17 @@ class AirConnectOutput(OutputModule):
     def run(self):
         self._logger.info('Running')
 
-        while True:
-            try:
-                # get new item from data hub
-                data_hub_item = self._data_input_queue.get()
+        loop = asyncio.get_event_loop()
+        tasks = [
+            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue))
+        ]
 
-                # check if item is a poison pill
-                if data_hub_item is None:
-                    self._logger.debug('Received poison pill')
-
-                    # exit loop
-                    break
-
-                if type(data_hub_item) is DataHubItem:
-                    self._logger.debug('Received ' + str(data_hub_item))
-
-            except(KeyboardInterrupt, SystemExit):
-                break
+        try:
+            loop.run_until_complete(asyncio.wait(tasks))
+        except(KeyboardInterrupt, SystemExit):
+            pass
+        finally:
+            loop.stop()
 
         # close data input queue
         self._data_input_queue.close()
