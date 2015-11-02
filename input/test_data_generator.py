@@ -1,3 +1,4 @@
+import datetime
 import logging
 import time
 
@@ -24,7 +25,7 @@ class TestDataGenerator(InputModule):
         while True:
             try:
                 # get new item from data hub
-                data_hub_item = DataHubItem('test', 'test_data_1234567890')
+                data_hub_item = DataHubItem('test', 'test data ' + str(datetime.datetime.now()))
 
                 self._logger.debug('Genereated dummy data ' + str(data_hub_item))
 
