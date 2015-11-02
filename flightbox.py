@@ -40,7 +40,7 @@ def flightbox_init():
 
     # create formatter
     logging_formatter = logging.Formatter(
-        '%(asctime)s %(processName)-25s %(threadName)-15s %(name)-20s %(levelname)-8s %(message)s')
+        '%(asctime)s %(processName)-25s %(threadName)-10s %(name)-35s %(levelname)-8s %(message)s')
 
     # create file handler
     logging_file_handler = logging.FileHandler(args.log_file)
