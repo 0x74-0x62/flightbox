@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
+from threading import Lock
 
 from data_hub.data_hub_item import DataHubItem
 from output.output_module import OutputModule
@@ -31,6 +32,46 @@ async def input_processor(loop, data_input_queue):
             logger.debug('Received ' + str(data_hub_item))
 
 
+class AirConnectServerClientProtocol(asyncio.Protocol):
+    def __init__(self, clients, clients_lock):
+        self._logger = logging.getLogger('AirConnectOutput.Server')
+        self._logger.debug('Initializing')
+
+        # store arguments in object variables
+        self._clients = clients
+        self._clients_lock = clients_lock
+
+    def connection_made(self, transport):
+        peername = transport.get_extra_info('peername')
+        self._logger.debug('New connection from {}'.format(peername))
+
+        # keep transport object
+        self._transport = transport
+
+        # add this client to global client set
+        with self._clients_lock:
+            self._clients.add(self)
+
+    def connection_lost(self, exc):
+        self._logger.debug('Connection closed to {}'.format(self._transport.get_extra_info('peername')))
+
+        # remove this client from global client set
+        with self._clients_lock:
+            self._clients.remove(self)
+
+    def data_received(self, data):
+        message = data.decode()
+
+        message_strip_lower = message.strip().lower()
+
+        if message_strip_lower == 'exit':
+            self._transport.close()
+        elif message_strip_lower == 'list_clients':
+            self._transport.write(str.encode(str(self._clients) + '\r\n'))
+        else:
+            self._transport.write(data)
+
+
 class AirConnectOutput(OutputModule):
     def __init__(self):
         # call parent constructor
@@ -43,16 +84,29 @@ class AirConnectOutput(OutputModule):
     def run(self):
         self._logger.info('Running')
 
+        # get asyncio loop
         loop = asyncio.get_event_loop()
+
+        # initialize client set
+        clients_lock = Lock()
+        clients = set()
+
+        # create server coroutine
+        air_connect_server = loop.create_server(lambda: AirConnectServerClientProtocol(clients=clients, clients_lock=clients_lock), host='127.0.0.1', port=2000)
+
+        # compile task list that will run in loop
         tasks = [
-            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue))
+            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue)),
+            asyncio.ensure_future(air_connect_server)
         ]
 
         try:
+            # start loop
             loop.run_until_complete(asyncio.wait(tasks))
         except(KeyboardInterrupt, SystemExit):
             pass
         finally:
+            air_connect_server.close()
             loop.stop()
 
         # close data input queue
