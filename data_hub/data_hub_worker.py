@@ -38,6 +38,15 @@ class DataHubWorker(Process):
 
                 if type(data_hub_item) is DataHubItem:
                     self._logger.debug('Received ' + str(data_hub_item))
+
+                    # iterate over all known output modules
+                    for output_module in self._output_modules:
+                        # check if received data type is in output module's requested data types
+                        if data_hub_item.get_content_type() in output_module['content_types'] \
+                                or 'ANY' in output_module['content_types']:
+                            self._logger.debug('Passing data to ' + str(output_module['output_module']))
+                            # forward data via queue
+                            output_module['queue'].put(data_hub_item)
                 else:
                     self._logger.warning('Dropping data (wrong data type)')
 
