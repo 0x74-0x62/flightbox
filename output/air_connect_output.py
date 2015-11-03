@@ -11,7 +11,7 @@ __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
 
 
-async def input_processor(loop, data_input_queue):
+async def input_processor(loop, data_input_queue, clients, clients_lock):
     logger = logging.getLogger('AirConnectOutput.InputProcessor')
 
     while True:
@@ -30,6 +30,10 @@ async def input_processor(loop, data_input_queue):
 
         if type(data_hub_item) is DataHubItem:
             logger.debug('Received ' + str(data_hub_item))
+
+            with clients_lock:
+                for client in clients:
+                    client.send_data(str.encode(str(data_hub_item.get_content_data()) + '\r\n'))
 
 
 class AirConnectServerClientProtocol(asyncio.Protocol):
@@ -71,6 +75,9 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
         else:
             self._transport.write(data)
 
+    def send_data(self, data):
+        self._transport.write(data)
+
 
 class AirConnectOutput(OutputModule):
     def __init__(self):
@@ -88,15 +95,15 @@ class AirConnectOutput(OutputModule):
         loop = asyncio.get_event_loop()
 
         # initialize client set
-        clients_lock = Lock()
-        clients = set()
+        self.clients_lock = Lock()
+        self.clients = set()
 
         # create server coroutine
-        air_connect_server = loop.create_server(lambda: AirConnectServerClientProtocol(clients=clients, clients_lock=clients_lock), host='127.0.0.1', port=2000)
+        air_connect_server = loop.create_server(lambda: AirConnectServerClientProtocol(clients=self.clients, clients_lock=self.clients_lock), host='', port=2000)
 
         # compile task list that will run in loop
         tasks = [
-            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue)),
+            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue, clients=self.clients, clients_lock=self.clients_lock)),
             asyncio.ensure_future(air_connect_server)
         ]
 
