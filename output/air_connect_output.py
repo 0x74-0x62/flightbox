@@ -33,17 +33,26 @@ async def input_processor(loop, data_input_queue, clients, clients_lock):
 
             with clients_lock:
                 for client in clients:
-                    client.send_data(str.encode(str(data_hub_item.get_content_data()) + '\r\n'))
+                    client.send_string_data(str(data_hub_item.get_content_data() + '\r\n'))
 
 
 class AirConnectServerClientProtocol(asyncio.Protocol):
-    def __init__(self, clients, clients_lock):
+    def __init__(self, clients, clients_lock, password = None):
         self._logger = logging.getLogger('AirConnectOutput.Server')
         self._logger.debug('Initializing')
 
         # store arguments in object variables
         self._clients = clients
         self._clients_lock = clients_lock
+        self._password = password
+
+        # set data forwarding flag
+        self._send_data_enabled = True
+        if self._password:
+            self._send_data_enabled = False
+
+        # initialize flag that indicates that we are waiting for a password input from the client
+        self._awaiting_pass = False
 
     def connection_made(self, transport):
         peername = transport.get_extra_info('peername')
@@ -56,6 +65,11 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
         with self._clients_lock:
             self._clients.add(self)
 
+        # request password
+        if self._password:
+            self._transport.write(str.encode('PASS?'))
+            self._awaiting_pass = True
+
     def connection_lost(self, exc):
         self._logger.debug('Connection closed to {}'.format(self._transport.get_extra_info('peername')))
 
@@ -66,8 +80,18 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
     def data_received(self, data):
         message = data.decode()
 
+        # check if we are waiting for password
+        if self._awaiting_pass:
+            if message.strip() == self._password:
+                self._send_data_enabled = True
+                return
+            else:
+                self._transport.close()
+
+        # pre-process input
         message_strip_lower = message.strip().lower()
 
+        # check for special commands
         if message_strip_lower == 'exit':
             self._transport.close()
         elif message_strip_lower == 'list_clients':
@@ -75,8 +99,12 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
         else:
             self._transport.write(data)
 
+    def send_string_data(self, data):
+        self.send_data(str.encode(data))
+
     def send_data(self, data):
-        self._transport.write(data)
+        if self._send_data_enabled:
+            self._transport.write(data)
 
 
 class AirConnectOutput(OutputModule):
@@ -99,7 +127,7 @@ class AirConnectOutput(OutputModule):
         self.clients = set()
 
         # create server coroutine
-        air_connect_server = loop.create_server(lambda: AirConnectServerClientProtocol(clients=self.clients, clients_lock=self.clients_lock), host='', port=2000)
+        air_connect_server = loop.create_server(lambda: AirConnectServerClientProtocol(clients=self.clients, clients_lock=self.clients_lock, password='2000'), host='', port=2000)
 
         # compile task list that will run in loop
         tasks = [
