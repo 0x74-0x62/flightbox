@@ -24,7 +24,7 @@ class TestDataGenerator(InputModule):
 
         while True:
             try:
-                # get new item from data hub
+                # create new item for data hub
                 data_hub_item = DataHubItem('test', 'test data ' + str(datetime.datetime.now()))
 
                 self._logger.debug('Genereated dummy data ' + str(data_hub_item))
