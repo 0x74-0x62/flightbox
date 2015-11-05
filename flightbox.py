@@ -11,6 +11,8 @@ import time
 
 from data_hub.data_hub_worker import DataHubWorker
 from input.test_data_generator import TestDataGenerator
+from input.input_network_sbs1 import InputNetworkSbs1
+from input.input_serial_gnss import InputSerialGnss
 from output.air_connect_output import AirConnectOutput
 
 __author__ = "Thorsten Biermann"
@@ -90,22 +92,33 @@ def flightbox_main():
 
         processes = []
 
+        # data hub worker
         data_hub_worker = DataHubWorker(data_hub)
         processes.append(data_hub_worker)
 
-        test_data_generator = TestDataGenerator(data_hub)
-        processes.append(test_data_generator)
-
+        # output modules
         air_connect_output = AirConnectOutput()
         data_hub_worker.add_output_module(air_connect_output)
         processes.append(air_connect_output)
 
+        # input modules
+        # test_data_generator = TestDataGenerator(data_hub)
+        # processes.append(test_data_generator)
+        input_network_sbs1 = InputNetworkSbs1(data_hub, 'rbpi2', 30003)
+        processes.append(input_network_sbs1)
+        input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
+        processes.append(input_serial_gnss)
+
         # processes need to be started after configuration, as they are executed in separate processes
         data_hub_worker.start()
         time.sleep(1)
-        test_data_generator.start()
-        time.sleep(1)
         air_connect_output.start()
+        time.sleep(1)
+        # test_data_generator.start()
+        # time.sleep(1)
+        input_network_sbs1.start()
+        time.sleep(1)
+        input_serial_gnss.start()
         time.sleep(1)
 
         # wait for data_hub_worker to finish
