@@ -26,7 +26,7 @@ class NetworkSbs1ClientProtocol(asyncio.Protocol):
 
         self._logger.debug('Data received: {!r}'.format(data_string))
 
-        messages = str.split(data_string)
+        messages = data_string.splitlines()
         for message in messages:
             data_hub_item = DataHubItem('sbs1', message)
             self._data_hub.put(data_hub_item)
