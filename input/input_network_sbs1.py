@@ -10,13 +10,14 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class NetworkSbs1ClientProtocol(asyncio.Protocol):
-    def __init__(self, loop, data_hub):
+    def __init__(self, loop, data_hub, message_types):
         self._logger = logging.getLogger('InputNetworkSbs1.Client')
         self._logger.debug('Initializing')
 
         # store arguments in object variables
         self._loop = loop
         self._data_hub = data_hub
+        self._message_types = message_types
 
     def connection_made(self, transport):
         self._logger.debug('Connection established')
@@ -28,20 +29,22 @@ class NetworkSbs1ClientProtocol(asyncio.Protocol):
 
         messages = data_string.splitlines()
         for message in messages:
-            data_hub_item = DataHubItem('sbs1', message)
-            self._data_hub.put(data_hub_item)
+            message_type = message.split(',')[1]
+            if message_type in self._message_types:
+                data_hub_item = DataHubItem('sbs1', message)
+                self._data_hub.put(data_hub_item)
 
     def connection_lost(self, exc):
         self._logger.debug('Connection terminated')
         self._loop.stop()
 
 
-async def connect_loop(loop, data_hub, host_name, port):
+async def connect_loop(loop, data_hub, host_name, port, message_types):
     logger = logging.getLogger('InputNetworkSbs1.ConnectLoop')
 
     while True:
         try:
-            await loop.create_connection(lambda: NetworkSbs1ClientProtocol(loop=loop, data_hub=data_hub), host_name, port)
+            await loop.create_connection(lambda: NetworkSbs1ClientProtocol(loop=loop, data_hub=data_hub, message_types=message_types), host_name, port)
         except OSError:
             logger.info("Server not up. Retrying to connect in 5 seconds.")
             await asyncio.sleep(5)
@@ -50,7 +53,7 @@ async def connect_loop(loop, data_hub, host_name, port):
 
 
 class InputNetworkSbs1(InputModule):
-    def __init__(self, data_hub, host_name, port):
+    def __init__(self, data_hub, host_name, port, message_types = None):
         # call parent constructor
         super().__init__(data_hub=data_hub)
 
@@ -61,6 +64,7 @@ class InputNetworkSbs1(InputModule):
         # store parameters in object variables
         self._host_name = host_name
         self._port = port
+        self._message_types = message_types
 
     def run(self):
         self._logger.info('Running')
@@ -70,7 +74,7 @@ class InputNetworkSbs1(InputModule):
 
         try:
             # start loop
-            loop.run_until_complete(connect_loop(loop=loop, data_hub=self._data_hub, host_name=self._host_name, port=self._port))
+            loop.run_until_complete(connect_loop(loop=loop, data_hub=self._data_hub, host_name=self._host_name, port=self._port, message_types=self._message_types))
             loop.run_forever()
         except(KeyboardInterrupt, SystemExit):
             pass
