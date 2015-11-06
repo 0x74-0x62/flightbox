@@ -7,7 +7,11 @@ import logging
 import logging.handlers
 from multiprocessing import Queue
 import multiprocessing.util
+import os
 import time
+
+# enable asyncio debug mode
+# os.environ['PYTHONASYNCIODEBUG'] = '1'
 
 from data_hub.data_hub_worker import DataHubWorker
 from input.test_data_generator import TestDataGenerator
@@ -24,6 +28,16 @@ arg_parser = argparse.ArgumentParser(description='FlightBox collects input from 
 arg_parser.add_argument('--log-file', dest='log_file', help='path to log file')
 arg_parser.set_defaults(log_file='/tmp/flightbox.log')
 args = arg_parser.parse_args()
+
+
+class LoggingFilter(logging.Filter):
+    def filter(self, record):
+        if record.name.startswith('DataHubWorker'):
+            return False
+        elif record.name.startswith('InputNetworkSbs1'):
+            return False
+
+        return True
 
 
 # watchdog initialization procedure
@@ -43,17 +57,19 @@ def flightbox_init():
 
     # create formatter
     logging_formatter = logging.Formatter(
-        '%(asctime)s %(processName)-25s %(threadName)-10s %(name)-35s %(levelname)-8s %(message)s')
+        '%(asctime)s %(process)-5d %(processName)-25s %(name)-35s %(levelname)-8s %(message)s')
 
     # create file handler
     logging_file_handler = logging.FileHandler(args.log_file)
     logging_file_handler.setLevel(logging.DEBUG)
     logging_file_handler.setFormatter(logging_formatter)
+    # logging_file_handler.addFilter(LoggingFilter())
 
     # create console handler
     logging_stream_handler = logging.StreamHandler()
     logging_stream_handler.setLevel(logging.DEBUG)
     logging_stream_handler.setFormatter(logging_formatter)
+    # logging_stream_handler.addFilter(LoggingFilter())
 
     # start logging thread
     logging_thread = logging.handlers.QueueListener(logging_queue, logging_file_handler, logging_stream_handler)
