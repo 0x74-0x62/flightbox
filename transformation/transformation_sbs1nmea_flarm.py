@@ -47,7 +47,7 @@ async def handle_sbs1_data(data, aircraft, aircraft_lock):
     msg_type = fields[1]
 
     # check if message is of interest
-    if msg_type in ['1', '2', '3', '4']:
+    if len(fields) > 16 and msg_type in ['1', '2', '3', '4']:
         icao_id = fields[4]
         callsign = fields[10].strip()
         altitude = fields[11]
