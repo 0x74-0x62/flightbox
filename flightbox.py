@@ -128,8 +128,8 @@ def flightbox_main():
         # processes.append(test_data_generator)
         input_network_sbs1 = InputNetworkSbs1(data_hub, 'rbpi2', 30003, message_types=['1', '2', '3', '4'])
         processes.append(input_network_sbs1)
-        # input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
-        # processes.append(input_serial_gnss)
+        input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
+        processes.append(input_serial_gnss)
 
         # processes need to be started after configuration, as they are executed in separate processes
         data_hub_worker.start()
@@ -138,11 +138,9 @@ def flightbox_main():
         sbs1nmea_to_flarm_transformation.start()
         time.sleep(1)
         # test_data_generator.start()
-        # time.sleep(1)
         input_network_sbs1.start()
+        input_serial_gnss.start()
         time.sleep(1)
-        # input_serial_gnss.start()
-        # time.sleep(1)
 
         # wait for data_hub_worker to finish
         data_hub_worker.join()
