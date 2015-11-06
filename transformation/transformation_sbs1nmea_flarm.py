@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import pynmea2
 from threading import Lock
 import time
 
@@ -12,7 +13,7 @@ __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
 
 
-async def input_processor(loop, data_input_queue, aircraft, aircraft_lock):
+async def input_processor(loop, data_input_queue, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.InputProcessor')
 
     while True:
@@ -33,8 +34,7 @@ async def input_processor(loop, data_input_queue, aircraft, aircraft_lock):
             logger.debug('Received ' + str(data_hub_item))
 
             if data_hub_item.get_content_type() == 'nmea':
-                # TODO convert data
-                pass
+                await handle_nmea_data(data_hub_item.get_content_data(), gnss_status, gnss_status_lock)
 
             if data_hub_item.get_content_type() == 'sbs1':
                 await handle_sbs1_data(data_hub_item.get_content_data(), aircraft, aircraft_lock)
@@ -97,11 +97,36 @@ async def handle_sbs1_data(data, aircraft, aircraft_lock):
                 aircraft[icao_id].heading = float(heading)
 
 
-async def data_processor(loop, aircraft, aircraft_lock):
+async def handle_nmea_data(data, gnss_status, gnss_status_lock):
+    logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.NmeaHandler')
+
+    # check if message is of interest
+    if data.startswith('$GPGGA'):
+        message = pynmea2.parse(data)
+
+        logger.info('GPGGA: lat={} {}, lon={} {}, alt={} {}, qual={:d}, n_sat={}, h_dop={}, geoidal_sep={} {}'.format(message.lat, message.lat_dir, message.lon, message.lon_dir, message.altitude, message.altitude_units, message.gps_qual, message.num_sats, message.horizontal_dil, message.geo_sep, message.geo_sep_units))
+        # logger.info('GPGGA: lat={} {}, lon={} {}, alt={} {}, qual={:d}, n_sat={}, h_dop={}, geoidal_sep={} {}, dgps_id={}, dgps_age={}'.format(message.lat, message.lat_dir, message.lon, message.lon_dir, message.altitude, message.altitude_units, message.gps_qual, message.num_sats, message.horizontal_dil, message.geo_sep, message.geo_sep_units, message.ref_station_id, message.age_gps_data))
+    elif data.startswith('$GPGLL'):
+        message = pynmea2.parse(data)
+
+        logger.info('GPGLL: lat={} {}, lon={} {}, status={}, pos_mode={}'.format(message.lat, message.lat_dir, message.lon, message.lon_dir, message.status, message.faa_mode))
+    elif data.startswith('$GPVTG'):
+        fields = (data.split('*')[0]).split(',')
+
+        if len(fields) > 9:
+            cog_t = fields[1]
+            cog_m = fields[3]
+            h_speed_kt = fields[5]
+            h_speed_kph = fields[7]
+            pos_mode = fields[9]
+
+            logger.info('GPVTG: cog_t={}, cog_m={}, h_speed_kt={}, h_speed_kph={}, pos_mode={}'.format(cog_t, cog_m, h_speed_kt, h_speed_kph, pos_mode))
+
+async def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.DataProcessor')
 
     while True:
-        logger.info('Processing data')
+        logger.debug('Processing data')
 
         with aircraft_lock:
             for icao_id in sorted(aircraft.keys()):
@@ -109,7 +134,7 @@ async def data_processor(loop, aircraft, aircraft_lock):
 
                 age_in_seconds = time.time() - current_aircraft.last_seen
 
-                logger.info('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.heading, age_in_seconds))
+                logger.debug('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.heading, age_in_seconds))
 
                 # delete entries of aircraft that have not been seen for a while
                 if age_in_seconds > 30.0:
@@ -130,6 +155,16 @@ class AircraftInfo(object):
         self.last_seen = None
 
 
+class GnssStatus(object):
+    def __init__(self):
+        self.latitude = None
+        self.longitude = None
+        self.altitude = None
+        self.h_speed = None
+        self.heading = None
+        self.last_update = None
+
+
 class Sbs1NmeaToFlarmTransformation(TransformationModule):
     def __init__(self, data_hub):
         # call parent constructor
@@ -143,6 +178,10 @@ class Sbs1NmeaToFlarmTransformation(TransformationModule):
         self._aircraft = {}
         self._aircraft_lock = Lock()
 
+        # initialize gnss data structure
+        self._gnss_status = GnssStatus()
+        self._gnss_status_lock = Lock()
+
     def run(self):
         self._logger.info('Running')
 
@@ -153,8 +192,8 @@ class Sbs1NmeaToFlarmTransformation(TransformationModule):
         # TODO add data processing task
         # TODO add data cleanup task
         tasks = [
-            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock)),
-            asyncio.ensure_future(data_processor(loop=loop, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock))
+            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock)),
+            asyncio.ensure_future(data_processor(loop=loop, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock))
         ]
 
         try:
