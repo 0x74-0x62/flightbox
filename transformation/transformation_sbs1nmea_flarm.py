@@ -13,15 +13,16 @@ __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
 
 
-async def input_processor(loop, data_input_queue, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
+@asyncio.coroutine
+def input_processor(loop, data_input_queue, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.InputProcessor')
 
     while True:
         # get executor that can run in the background (and is asyncio-enabled)
-        executor = ThreadPoolExecutor()
+        executor = ThreadPoolExecutor(max_workers=1)
 
         # get new item from data hub
-        data_hub_item = await loop.run_in_executor(executor, data_input_queue.get)
+        data_hub_item = yield from loop.run_in_executor(executor, data_input_queue.get)
 
         # check if item is a poison pill
         if data_hub_item is None:
@@ -34,12 +35,13 @@ async def input_processor(loop, data_input_queue, aircraft, aircraft_lock, gnss_
             logger.debug('Received ' + str(data_hub_item))
 
             if data_hub_item.get_content_type() == 'nmea':
-                await handle_nmea_data(data_hub_item.get_content_data(), gnss_status, gnss_status_lock)
+                yield from handle_nmea_data(data_hub_item.get_content_data(), gnss_status, gnss_status_lock)
 
             if data_hub_item.get_content_type() == 'sbs1':
-                await handle_sbs1_data(data_hub_item.get_content_data(), aircraft, aircraft_lock)
+                yield from handle_sbs1_data(data_hub_item.get_content_data(), aircraft, aircraft_lock)
 
-async def handle_sbs1_data(data, aircraft, aircraft_lock):
+@asyncio.coroutine
+def handle_sbs1_data(data, aircraft, aircraft_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.Sbs1Handler')
 
     fields = data.split(',')
@@ -109,7 +111,8 @@ def convert_nmea_coord_to_degrees(coordinate):
     return degrees
 
 
-async def handle_nmea_data(data, gnss_status, gnss_status_lock):
+@asyncio.coroutine
+def handle_nmea_data(data, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.NmeaHandler')
 
     try:
@@ -173,7 +176,8 @@ async def handle_nmea_data(data, gnss_status, gnss_status_lock):
     except ValueError:
         logger.warn('Problem converting NMEA data')
 
-async def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
+@asyncio.coroutine
+def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.DataProcessor')
 
     while True:
@@ -194,7 +198,7 @@ async def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status
                 if age_in_seconds > 30.0:
                     del aircraft[icao_id]
 
-        await asyncio.sleep(1)
+        yield from asyncio.sleep(1)
 
 
 class AircraftInfo(object):
@@ -243,12 +247,10 @@ class Sbs1NmeaToFlarmTransformation(TransformationModule):
         loop = asyncio.get_event_loop()
 
         # compile task list that will run in loop
-        # TODO add data processing task
-        # TODO add data cleanup task
-        tasks = [
-            asyncio.ensure_future(input_processor(loop=loop, data_input_queue=self._data_input_queue, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock)),
-            asyncio.ensure_future(data_processor(loop=loop, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock))
-        ]
+        tasks = asyncio.gather(
+            asyncio.async(input_processor(loop=loop, data_input_queue=self._data_input_queue, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock)),
+            asyncio.async(data_processor(loop=loop, aircraft=self._aircraft, aircraft_lock=self._aircraft_lock, gnss_status=self._gnss_status, gnss_status_lock=self._gnss_status_lock))
+        )
 
         try:
             # start loop

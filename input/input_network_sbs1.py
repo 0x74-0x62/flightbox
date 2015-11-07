@@ -39,15 +39,16 @@ class NetworkSbs1ClientProtocol(asyncio.Protocol):
         self._loop.stop()
 
 
-async def connect_loop(loop, data_hub, host_name, port, message_types):
+@asyncio.coroutine
+def connect_loop(loop, data_hub, host_name, port, message_types):
     logger = logging.getLogger('InputNetworkSbs1.ConnectLoop')
 
     while True:
         try:
-            await loop.create_connection(lambda: NetworkSbs1ClientProtocol(loop=loop, data_hub=data_hub, message_types=message_types), host_name, port)
+            yield from loop.create_connection(lambda: NetworkSbs1ClientProtocol(loop=loop, data_hub=data_hub, message_types=message_types), host_name, port)
         except OSError:
             logger.info("Server not up. Retrying to connect in 5 seconds.")
-            await asyncio.sleep(5)
+            yield from asyncio.sleep(5)
         else:
             break
 

@@ -11,7 +11,8 @@ __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
 
 
-async def input_processor(loop, data_input_queue, clients, clients_lock):
+@asyncio.coroutine
+def input_processor(loop, data_input_queue, clients, clients_lock):
     logger = logging.getLogger('AirConnectOutput.InputProcessor')
 
     while True:
@@ -19,7 +20,7 @@ async def input_processor(loop, data_input_queue, clients, clients_lock):
         executor = ThreadPoolExecutor()
 
         # get new item from data hub
-        data_hub_item = await loop.run_in_executor(executor, data_input_queue.get)
+        data_hub_item = yield from loop.run_in_executor(executor, data_input_queue.get)
 
         # check if item is a poison pill
         if data_hub_item is None:
