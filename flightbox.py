@@ -148,8 +148,11 @@ def flightbox_main():
     except(KeyboardInterrupt, SystemExit):
         # wait for all processes to finish
         for process in processes:
-            flightbox_logger.debug('Waiting for process ' + process.name + ' to terminate')
-            process.join()
+            if process.is_alive():
+                flightbox_logger.debug('Waiting for process ' + process.name + ' to terminate')
+                process.join()
+            else:
+                flightbox_logger.debug('Process ' + process.name + ' already died')
 
 
 # flightbox cleanup procedure

@@ -2,6 +2,7 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import pynmea2
+import sys
 from threading import Lock
 import time
 
@@ -44,59 +45,64 @@ def input_processor(loop, data_input_queue, aircraft, aircraft_lock, gnss_status
 def handle_sbs1_data(data, aircraft, aircraft_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.Sbs1Handler')
 
-    fields = data.split(',')
+    try:
+        fields = data.split(',')
 
-    msg_type = fields[1]
+        msg_type = fields[1]
 
-    # check if message is of interest
-    if len(fields) > 16 and msg_type in ['1', '2', '3', '4']:
-        icao_id = fields[4]
-        callsign = fields[10].strip()
-        altitude = fields[11]
-        horizontal_speed = fields[12]
-        heading = fields[13]
-        latitude = fields[14]
-        longitude = fields[15]
-        vertical_speed = fields[16]
-
-        with aircraft_lock:
-            # initialize empty AircraftInfo object if required
-            if icao_id not in aircraft.keys():
-                aircraft[icao_id] = AircraftInfo()
-
-            # save timestamp
-            aircraft[icao_id].last_seen = time.time()
-
-        # handle aircraft identification data
-        if msg_type == '1':
-            logger.debug("A/C identification: {} callsign={}".format(icao_id, callsign))
+        # check if message is of interest
+        if len(fields) > 16 and msg_type in ['1', '2', '3', '4']:
+            icao_id = fields[4]
+            callsign = fields[10].strip()
+            altitude = fields[11]
+            horizontal_speed = fields[12]
+            heading = fields[13]
+            latitude = fields[14]
+            longitude = fields[15]
+            vertical_speed = fields[16]
 
             with aircraft_lock:
-                aircraft[icao_id].callsign = callsign
+                # initialize empty AircraftInfo object if required
+                if icao_id not in aircraft.keys():
+                    aircraft[icao_id] = AircraftInfo()
 
-        # handle ground position data
-        elif msg_type == '2' or msg_type == '3':
-            position_type = ''
-            if msg_type == '2':
-                position_type = 'Ground'
-            elif msg_type == '3':
-                position_type = 'Airborne'
+                # save timestamp
+                aircraft[icao_id].last_seen = time.time()
 
-            logger.debug('{} position: {} lat={} lon={} alt={}'.format(position_type, icao_id, latitude, longitude, altitude))
+            # handle aircraft identification data
+            if msg_type == '1':
+                logger.debug("A/C identification: {} callsign={}".format(icao_id, callsign))
 
-            with aircraft_lock:
-                aircraft[icao_id].latitude = float(latitude)
-                aircraft[icao_id].longitude = float(longitude)
-                aircraft[icao_id].altitude = float(altitude)
+                with aircraft_lock:
+                    aircraft[icao_id].callsign = callsign
 
-        # handle velocity data
-        elif msg_type == '4':
-            logger.debug('Vector: {} h_speed={} heading={} v_speed={}'.format(icao_id, horizontal_speed, heading, vertical_speed))
+            # handle ground position data
+            elif msg_type == '2' or msg_type == '3':
+                position_type = ''
+                if msg_type == '2':
+                    position_type = 'Ground'
+                elif msg_type == '3':
+                    position_type = 'Airborne'
 
-            with aircraft_lock:
-                aircraft[icao_id].h_speed = float(horizontal_speed)
-                aircraft[icao_id].v_speed = float(vertical_speed)
-                aircraft[icao_id].heading = float(heading)
+                logger.debug('{} position: {} lat={} lon={} alt={}'.format(position_type, icao_id, latitude, longitude, altitude))
+
+                with aircraft_lock:
+                    aircraft[icao_id].latitude = float(latitude)
+                    aircraft[icao_id].longitude = float(longitude)
+                    aircraft[icao_id].altitude = float(altitude)
+
+            # handle velocity data
+            elif msg_type == '4':
+                logger.debug('Vector: {} h_speed={} heading={} v_speed={}'.format(icao_id, horizontal_speed, heading, vertical_speed))
+
+                with aircraft_lock:
+                    aircraft[icao_id].h_speed = float(horizontal_speed)
+                    aircraft[icao_id].v_speed = float(vertical_speed)
+                    aircraft[icao_id].heading = float(heading)
+    except ValueError:
+        logger.warn('Problem during SBS1 data parsing')
+    except:
+        logger.exception(sys.exc_info()[0])
 
 def convert_nmea_coord_to_degrees(coordinate):
     # extract degree part
@@ -171,17 +177,22 @@ def handle_nmea_data(data, gnss_status, gnss_status_lock):
                 logger.debug('GPVTG: cog_t={}, cog_m={}, h_speed_kt={}, h_speed_kph={}, pos_mode={}'.format(cog_t, cog_m, h_speed_kt, h_speed_kph, pos_mode))
 
                 with gnss_status_lock:
-                    gnss_status.h_speed = float(h_speed_kt)
-                    gnss_status.heading = float(cog_t)
+                    # check if values are available before converting
+                    if h_speed_kt:
+                        gnss_status.h_speed = float(h_speed_kt)
+                    if cog_t:
+                        gnss_status.heading = float(cog_t)
     except ValueError:
-        logger.warn('Problem converting NMEA data')
+        logger.warn('Problem during NMEA data parsing')
+    except:
+        logger.exception(sys.exc_info()[0])
 
 @asyncio.coroutine
 def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock):
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.DataProcessor')
 
     while True:
-        logger.debug('Processing data')
+        logger.info('Processing data:')
 
         with gnss_status_lock:
             logger.info('GNSS: lat={}, lon={}, alt={}, h_s={}, h={}'.format(gnss_status.latitude, gnss_status.longitude, gnss_status.altitude, gnss_status.h_speed, gnss_status.heading))
@@ -254,9 +265,12 @@ class Sbs1NmeaToFlarmTransformation(TransformationModule):
 
         try:
             # start loop
-            loop.run_until_complete(asyncio.wait(tasks))
+            loop.run_until_complete(tasks)
         except(KeyboardInterrupt, SystemExit):
             pass
+        except:
+            self._logger.exception(sys.exc_info()[0])
+            tasks.cancel()
         finally:
             loop.stop()
 
