@@ -192,10 +192,10 @@ def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock)
     logger = logging.getLogger('Sbs1NmeaToFlarmTransformation.DataProcessor')
 
     while True:
-        logger.info('Processing data:')
+        logger.debug('Processing data:')
 
         with gnss_status_lock:
-            logger.info('GNSS: lat={}, lon={}, alt={}, h_s={}, h={}'.format(gnss_status.latitude, gnss_status.longitude, gnss_status.altitude, gnss_status.h_speed, gnss_status.heading))
+            logger.debug('GNSS: lat={}, lon={}, alt={}, h_s={}, h={}'.format(gnss_status.latitude, gnss_status.longitude, gnss_status.altitude, gnss_status.h_speed, gnss_status.heading))
 
         with aircraft_lock:
             for icao_id in sorted(aircraft.keys()):
@@ -203,7 +203,7 @@ def data_processor(loop, aircraft, aircraft_lock, gnss_status, gnss_status_lock)
 
                 age_in_seconds = time.time() - current_aircraft.last_seen
 
-                logger.info('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.heading, age_in_seconds))
+                logger.debug('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.heading, age_in_seconds))
 
                 # delete entries of aircraft that have not been seen for a while
                 if age_in_seconds > 30.0:

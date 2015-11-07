@@ -60,9 +60,9 @@ def flightbox_init():
         '%(asctime)s %(process)-5d %(processName)-25s %(name)-35s %(levelname)-8s %(message)s')
 
     # create file handler
-    logging_file_handler = logging.FileHandler(args.log_file)
-    logging_file_handler.setLevel(logging.DEBUG)
-    logging_file_handler.setFormatter(logging_formatter)
+    # logging_file_handler = logging.FileHandler(args.log_file)
+    # logging_file_handler.setLevel(logging.WARNING)
+    # logging_file_handler.setFormatter(logging_formatter)
     # logging_file_handler.addFilter(LoggingFilter())
 
     # create console handler
@@ -72,7 +72,8 @@ def flightbox_init():
     # logging_stream_handler.addFilter(LoggingFilter())
 
     # start logging thread
-    logging_thread = logging.handlers.QueueListener(logging_queue, logging_file_handler, logging_stream_handler)
+    # logging_thread = logging.handlers.QueueListener(logging_queue, logging_file_handler, logging_stream_handler)
+    logging_thread = logging.handlers.QueueListener(logging_queue, logging_stream_handler)
     logging_thread.start()
 
     """ set up sending side of logging framework """
@@ -114,9 +115,9 @@ def flightbox_main():
         processes.append(data_hub_worker)
 
         # output modules
-        # air_connect_output = AirConnectOutput()
-        # data_hub_worker.add_output_module(air_connect_output)
-        # processes.append(air_connect_output)
+        air_connect_output = AirConnectOutput()
+        data_hub_worker.add_output_module(air_connect_output)
+        processes.append(air_connect_output)
 
         # transformation modules
         sbs1nmea_to_flarm_transformation = Sbs1NmeaToFlarmTransformation(data_hub)
@@ -128,13 +129,14 @@ def flightbox_main():
         # processes.append(test_data_generator)
         input_network_sbs1 = InputNetworkSbs1(data_hub, 'rbpi2', 30003, message_types=['1', '2', '3', '4'])
         processes.append(input_network_sbs1)
-        input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
+        #input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
+        input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)
         processes.append(input_serial_gnss)
 
         # processes need to be started after configuration, as they are executed in separate processes
         data_hub_worker.start()
         time.sleep(1)
-        # air_connect_output.start()
+        air_connect_output.start()
         sbs1nmea_to_flarm_transformation.start()
         time.sleep(1)
         # test_data_generator.start()
