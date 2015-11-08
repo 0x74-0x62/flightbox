@@ -127,7 +127,7 @@ def flightbox_main():
         # input modules
         # test_data_generator = TestDataGenerator(data_hub)
         # processes.append(test_data_generator)
-        input_network_sbs1 = InputNetworkSbs1(data_hub, 'rbpi2', 30003, message_types=['1', '2', '3', '4'])
+        input_network_sbs1 = InputNetworkSbs1(data_hub, '127.0.0.1', 30003, message_types=['1', '2', '3', '4'])
         processes.append(input_network_sbs1)
         #input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
         input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)
