@@ -20,7 +20,7 @@ class NetworkSbs1ClientProtocol(asyncio.Protocol):
         self._message_types = message_types
 
     def connection_made(self, transport):
-        self._logger.debug('Connection established')
+        self._logger.info('Connection established to {}'.format(transport.get_extra_info('peername')))
 
     def data_received(self, data):
         data_string = data.decode().strip()
@@ -29,10 +29,13 @@ class NetworkSbs1ClientProtocol(asyncio.Protocol):
 
         messages = data_string.splitlines()
         for message in messages:
-            message_type = message.split(',')[1]
-            if message_type in self._message_types:
-                data_hub_item = DataHubItem('sbs1', message)
-                self._data_hub.put(data_hub_item)
+            try:
+                message_type = message.split(',')[1]
+                if message_type in self._message_types:
+                    data_hub_item = DataHubItem('sbs1', message)
+                    self._data_hub.put(data_hub_item)
+            except:
+                pass
 
     def connection_lost(self, exc):
         self._logger.debug('Connection terminated')
@@ -45,6 +48,7 @@ def connect_loop(loop, data_hub, host_name, port, message_types):
 
     while True:
         try:
+            logger.info("Creating new connection")
             yield from loop.create_connection(lambda: NetworkSbs1ClientProtocol(loop=loop, data_hub=data_hub, message_types=message_types), host_name, port)
         except OSError:
             logger.info("Server not up. Retrying to connect in 5 seconds.")
