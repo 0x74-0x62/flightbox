@@ -24,6 +24,14 @@ def knots_to_mps(knots):
     return knots / KNOTS_PER_MPS
 
 
+def fpm_to_mps(feet_per_minute):
+    return feet_to_meters(feet_per_minute) / 60.0
+
+
+def mps_to_fpm(meters_per_second):
+    return meters_to_feet(meters_per_second) * 60.0
+
+
 def nmea_coord_to_degrees(coordinate):
     # extract degree part
     degrees = float(int(coordinate / 100.0))
@@ -35,3 +43,8 @@ def nmea_coord_to_degrees(coordinate):
     degrees += minutes / 60.0
 
     return degrees
+
+
+def ogn_coord_to_degrees(coordinate):
+    # format is identical to NMEA
+    return nmea_coord_to_degrees(coordinate)
