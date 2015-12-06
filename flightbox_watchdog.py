@@ -4,7 +4,7 @@
 
 from os import path
 import psutil
-from screenutils import Screen
+from utils.detached_screen import DetachedScreen
 import time
 
 __author__ = "Thorsten Biermann"
@@ -53,10 +53,8 @@ def start_flightbox():
     global flightbox_command
 
     print("Starting flightbox inside screen")
-    s = Screen('flightbox', initialize=True)
+    s = DetachedScreen('flightbox', command=flightbox_command, initialize=True)
     s.disable_logs()
-    s.send_commands(flightbox_command)
-    s.detach()
 
 
 def restart_flightbox():
@@ -86,17 +84,12 @@ def start_ogn():
     global ogn_path
 
     print("Starting OGN inside screen")
-    s_rf = Screen('ogn_rf', initialize=True)
-    s_rf.disable_logs()
-    s_rf.send_commands("cd {}".format(ogn_path))
-    s_rf.send_commands("{} {}".format(path.join(ogn_path, 'ogn-rf'), path.join(ogn_path, 'ogn.conf')))
-    s_rf.detach()
 
-    s_decode = Screen('ogn_decode', initialize=True)
+    s_rf = DetachedScreen('ogn_rf', command="{} {}".format(path.join(ogn_path, 'ogn-rf'), path.join(ogn_path, 'ogn.conf')), initialize=True)
+    s_rf.disable_logs()
+
+    s_decode = DetachedScreen('ogn_decode', command="{} {}".format(path.join(ogn_path, 'ogn-decode'), path.join(ogn_path, 'ogn.conf')), initialize=True)
     s_decode.disable_logs()
-    s_decode.send_commands("cd {}".format(ogn_path))
-    s_decode.send_commands("{} {}".format(path.join(ogn_path, 'ogn-decode'), path.join(ogn_path, 'ogn.conf')))
-    s_decode.detach()
 
 
 def restart_ogn():
