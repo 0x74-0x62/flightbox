@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import logging
+import setproctitle
 import sys
 from threading import Lock
 
@@ -109,7 +110,7 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
             self._transport.write(data)
 
 
-class AirConnectOutput(OutputModule):
+class OutputNetworkAirConnect(OutputModule):
     def __init__(self):
         # call parent constructor
         super().__init__()
@@ -123,6 +124,8 @@ class AirConnectOutput(OutputModule):
         self.clients = set()
 
     def run(self):
+        setproctitle.setproctitle("flightbox_output_network_airconnect")
+
         self._logger.info('Running')
 
         # get asyncio loop

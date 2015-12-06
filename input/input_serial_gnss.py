@@ -1,5 +1,6 @@
 import logging
 import serial
+import setproctitle
 import time
 
 from data_hub.data_hub_item import DataHubItem
@@ -24,6 +25,8 @@ class InputSerialGnss(InputModule):
         self._baud_rate = baud_rate
 
     def run(self):
+        setproctitle.setproctitle("flightbox_input_serial_gnss")
+
         self._logger.info('Running')
 
         # initialize serial object

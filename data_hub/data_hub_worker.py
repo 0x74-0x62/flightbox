@@ -1,4 +1,5 @@
 import logging
+import setproctitle
 from multiprocessing import Process, Queue
 
 from data_hub.data_hub_item import DataHubItem
@@ -24,6 +25,8 @@ class DataHubWorker(Process):
         self._output_modules = []
 
     def run(self):
+        setproctitle.setproctitle("flightbox_datahubworker")
+
         self._logger.info('Running')
 
         while True:

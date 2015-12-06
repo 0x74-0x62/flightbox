@@ -4,6 +4,7 @@ from geopy.distance import vincenty
 import logging
 import pynmea2
 import re
+import setproctitle
 import sys
 from threading import Lock
 import time
@@ -372,7 +373,7 @@ def generate_flarm_messages(gnss_status, aircraft):
         relative_north = '{:.0f}'.format(min(max(distance_north_m, -32768), 32767))
         relative_east = '{:.0f}'.format(min(max(distance_east_m, -32768), 32767))
 
-        logger.info('{}: dist={:.0f} m, initial_bearing={:.0f} deg, final_bearing={:.0f} deg, dist_n={:.0f} m, dist_e={:.0f} m'.format(aircraft.identifier, distance_m, initial_bearing, final_bearing, distance_north_m, distance_east_m))
+        logger.debug('{}: dist={:.0f} m, initial_bearing={:.0f} deg, final_bearing={:.0f} deg, dist_n={:.0f} m, dist_e={:.0f} m'.format(aircraft.identifier, distance_m, initial_bearing, final_bearing, distance_north_m, distance_east_m))
 
         relative_vertical = ''
         if gnss_status.altitude and aircraft.altitude:
@@ -407,7 +408,7 @@ def generate_flarm_messages(gnss_status, aircraft):
 
         flarm_message_laa = pynmea2.ProprietarySentence('F', ['LAA', alarm_level, relative_north, relative_east, relative_vertical, identifier_type, identifier, track, turn_rate, ground_speed, climb_rate, acft_type])
         flarm_messages.append(str(flarm_message_laa))
-        logger.info('FLARM message: {}'.format(str(flarm_message_laa)))
+        logger.debug('FLARM message: {}'.format(str(flarm_message_laa)))
 
         if gnss_status.course:
             """ generate PFLAU message """
@@ -447,7 +448,7 @@ def generate_flarm_messages(gnss_status, aircraft):
 
             flarm_message_laa = pynmea2.ProprietarySentence('F', ['LAU', rx, tx, gps, power, alarm_level, relative_bearing, alarm_type, relative_vertical, relative_distance, identifier])
             flarm_messages.append(str(flarm_message_laa))
-            logger.info('FLARM message: {}'.format(str(flarm_message_laa)))
+            logger.debug('FLARM message: {}'.format(str(flarm_message_laa)))
 
     if len(flarm_messages) > 0:
         return flarm_messages
@@ -459,7 +460,7 @@ def data_processor(loop, data_hub, aircraft, aircraft_lock, gnss_status, gnss_st
     logger = logging.getLogger('Sbs1OgnNmeaToFlarmTransformation.DataProcessor')
 
     while True:
-        logger.info('Processing data:')
+        logger.debug('Processing data:')
 
         with gnss_status_lock:
             logger.debug('GNSS: lat={}, lon={}, alt={}, h_s={}, h={}'.format(gnss_status.latitude, gnss_status.longitude, gnss_status.altitude, gnss_status.h_speed, gnss_status.course))
@@ -470,7 +471,7 @@ def data_processor(loop, data_hub, aircraft, aircraft_lock, gnss_status, gnss_st
 
                 age_in_seconds = time.time() - current_aircraft.last_seen
 
-                logger.info('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.course, age_in_seconds))
+                logger.debug('{}: cs={}, lat={}, lon={}, alt={}, h_s={}, v_s={}, h={}, a={:.0f}'.format(icao_id, current_aircraft.callsign, current_aircraft.latitude, current_aircraft.longitude, current_aircraft.altitude, current_aircraft.h_speed, current_aircraft.v_speed, current_aircraft.course, age_in_seconds))
 
                 # generate FLARM messages
                 flarm_messages = generate_flarm_messages(gnss_status=gnss_status, aircraft=current_aircraft)
@@ -527,6 +528,8 @@ class Sbs1OgnNmeaToFlarmTransformation(TransformationModule):
         self._gnss_status_lock = Lock()
 
     def run(self):
+        setproctitle.setproctitle("flightbox_transformation_sbs1ognnmea_flarm")
+
         self._logger.info('Running')
 
         # get asyncio loop

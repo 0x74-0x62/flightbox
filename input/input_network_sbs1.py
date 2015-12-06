@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import setproctitle
 
 from data_hub.data_hub_item import DataHubItem
 from input.input_module import InputModule
@@ -72,6 +73,8 @@ class InputNetworkSbs1(InputModule):
         self._message_types = message_types
 
     def run(self):
+        setproctitle.setproctitle("flightbox_input_network_sbs1")
+
         self._logger.info('Running')
 
         # get asyncio loop

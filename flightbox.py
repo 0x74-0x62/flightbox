@@ -8,6 +8,7 @@ import logging.handlers
 from multiprocessing import Queue
 import multiprocessing.util
 import os
+import setproctitle
 import time
 
 # enable asyncio debug mode
@@ -18,7 +19,7 @@ from input.test_data_generator import TestDataGenerator
 from input.input_network_sbs1 import InputNetworkSbs1
 from input.input_network_ogn_server import InputNetworkOgnServer
 from input.input_serial_gnss import InputSerialGnss
-from output.air_connect_output import AirConnectOutput
+from output.output_network_airconnect import OutputNetworkAirConnect
 from transformation.transformation_sbs1ognnmea_flarm import Sbs1OgnNmeaToFlarmTransformation
 
 __author__ = "Thorsten Biermann"
@@ -117,7 +118,7 @@ def flightbox_main():
 
         """ output modules """
 
-        air_connect_output = AirConnectOutput()
+        air_connect_output = OutputNetworkAirConnect()
         data_hub_worker.add_output_module(air_connect_output)
         processes.append(air_connect_output)
 
@@ -132,15 +133,15 @@ def flightbox_main():
         # test_data_generator = TestDataGenerator(data_hub)
         # processes.append(test_data_generator)
 
-        #input_network_sbs1 = InputNetworkSbs1(data_hub, '127.0.0.1', 30003, message_types=['1', '2', '3', '4'])
-        #processes.append(input_network_sbs1)
+        input_network_sbs1 = InputNetworkSbs1(data_hub, '127.0.0.1', 30003, message_types=['1', '2', '3', '4'])
+        processes.append(input_network_sbs1)
 
         input_network_ogn = InputNetworkOgnServer(data_hub)
         processes.append(input_network_ogn)
 
-        #input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
-        #input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)
-        #processes.append(input_serial_gnss)
+        # input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
+        input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)
+        processes.append(input_serial_gnss)
 
         # processes need to be started after configuration, as they are executed in separate processes
         data_hub_worker.start()
@@ -149,9 +150,9 @@ def flightbox_main():
         sbs1ognnmea_to_flarm_transformation.start()
         time.sleep(1)
         # test_data_generator.start()
-        #input_network_sbs1.start()
+        input_network_sbs1.start()
         input_network_ogn.start()
-        #input_serial_gnss.start()
+        input_serial_gnss.start()
         time.sleep(1)
 
         # wait for data_hub_worker to finish
@@ -192,6 +193,8 @@ if __name__ == "__main__":
     flightbox_logger = None
     data_hub = None
     data_hub_worker = None
+
+    setproctitle.setproctitle("flightbox")
 
     # initialize framework
     flightbox_init()

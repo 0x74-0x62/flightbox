@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import logging
 import re
+import setproctitle
 import sys
 from threading import Lock
 
@@ -18,9 +19,9 @@ def ogn_aprs_heartbeat(loop, clients, clients_lock, server_name, server_software
     logger = logging.getLogger('InputNetworkOgnServer.Heartbeat')
 
     while True:
-        heartbeat = '# {} {} {} {}\r\n'.format(server_software, datetime.datetime.utcnow().strftime('%d %b %Y %H:%M:%S GMT'), server_name, '127.0.0.1:14580')
+        heartbeat = '# {} {} {} {}'.format(server_software, datetime.datetime.utcnow().strftime('%d %b %Y %H:%M:%S GMT'), server_name, '127.0.0.1:14580')
 
-        logger.info('Sending heartbeat: {}'.format(heartbeat))
+        logger.debug('Sending heartbeat: {}'.format(heartbeat))
 
         with clients_lock:
             for client in clients:
@@ -123,6 +124,8 @@ class InputNetworkOgnServer(InputModule):
         self._server_name = 'FLIGHTBOX'
 
     def run(self):
+        setproctitle.setproctitle("flightbox_input_network_ogn_server")
+
         self._logger.info('Running')
 
         # get asyncio loop
