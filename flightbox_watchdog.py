@@ -2,6 +2,7 @@
 
 """flightbox_watchdog.py: Description of what flightbox_watchdog.py does."""
 
+from os import path
 import psutil
 from screenutils import Screen
 import time
@@ -24,6 +25,22 @@ required_flightbox_processes['flightbox_input_serial_gnss'] = {'status': None}
 # define command for starting flightbox
 flightbox_command = '/home/pi/opt/flightbox/flightbox.py'
 
+# define OGN processes that must be running
+required_ogn_processes = {}
+required_ogn_processes['ogn-rf'] = {'status': None}
+required_ogn_processes['ogn-decode'] = {'status': None}
+
+# define path where OGN binaries are located
+ogn_path = '/home/pi/opt/rtlsdr-ogn'
+
+
+def check_flightbox_processes():
+    global required_flightbox_processes
+
+    for p in psutil.process_iter():
+        if p.name() in required_flightbox_processes.keys():
+            required_flightbox_processes[p.name()]['status'] = p.status()
+
 
 def kill_all_flightbox_processes():
     for p in psutil.process_iter():
@@ -37,6 +54,7 @@ def start_flightbox():
 
     print("Starting flightbox inside screen")
     s = Screen('flightbox', initialize=True)
+    s.disable_logs()
     s.send_commands(flightbox_command)
     s.detach()
 
@@ -47,24 +65,70 @@ def restart_flightbox():
     start_flightbox()
 
 
-def check_flightbox_processes():
-    global required_flightbox_processes
+def check_ogn_processes():
+    global required_ogn_processes
 
     for p in psutil.process_iter():
-        if p.name() in required_flightbox_processes.keys():
-            required_flightbox_processes[p.name()]['status'] = p.status()
+        if p.name() in required_ogn_processes.keys():
+            required_ogn_processes[p.name()]['status'] = p.status()
+
+
+def kill_all_ogn_processes():
+    global ogn_path
+
+    for p in psutil.process_iter():
+        if p.name().startswith('ogn'):
+            print("Killing process {}".format(p.name()))
+            p.kill()
+
+
+def start_ogn():
+    global ogn_path
+
+    print("Starting OGN inside screen")
+    s_rf = Screen('ogn_rf', initialize=True)
+    s_rf.disable_logs()
+    s_rf.send_commands("cd {}".format(ogn_path))
+    s_rf.send_commands("{} {}".format(path.join(ogn_path, 'ogn-rf'), path.join(ogn_path, 'ogn.conf')))
+    s_rf.detach()
+
+    s_decode = Screen('ogn_decode', initialize=True)
+    s_decode.disable_logs()
+    s_decode.send_commands("cd {}".format(ogn_path))
+    s_decode.send_commands("{} {}".format(path.join(ogn_path, 'ogn-decode'), path.join(ogn_path, 'ogn.conf')))
+    s_decode.detach()
+
+
+def restart_ogn():
+    kill_all_ogn_processes()
+    time.sleep(1.0)
+    start_ogn()
 
 
 # check if script is executed directly
 if __name__ == "__main__":
     check_flightbox_processes()
+    check_ogn_processes()
 
     is_flightbox_restart_required = False
+    is_ogn_restart_required = False
 
     for p in required_flightbox_processes.keys():
         if required_flightbox_processes[p]['status'] not in ['running', 'sleeping']:
             print("{} not running".format(p))
             is_flightbox_restart_required = True
+            is_ogn_restart_required = True
+
+    for p in required_ogn_processes.keys():
+        if required_ogn_processes[p]['status'] not in ['running', 'sleeping']:
+            print("{} not running".format(p))
+            is_ogn_restart_required = True
 
     if is_flightbox_restart_required:
+        print('== Restarting FlightBox')
         restart_flightbox()
+
+    if is_ogn_restart_required:
+        time.sleep(10.0)
+        print('== Restarting OGN')
+        restart_ogn()
