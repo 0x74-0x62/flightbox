@@ -40,6 +40,10 @@ def input_processor(loop, data_input_queue, clients, clients_lock):
 
 
 class AirConnectServerClientProtocol(asyncio.Protocol):
+    """
+    AirConnect protocol implementation (server side).
+    """
+
     def __init__(self, clients, clients_lock, password = None):
         self._logger = logging.getLogger('AirConnectOutput.Server')
         self._logger.debug('Initializing')
@@ -111,6 +115,11 @@ class AirConnectServerClientProtocol(asyncio.Protocol):
 
 
 class OutputNetworkAirConnect(OutputModule):
+    """
+    Output module that provides AirConnect network interface. This is used to provide services to navigation software,
+    like SkyDemon.
+    """
+
     def __init__(self):
         # call parent constructor
         super().__init__()

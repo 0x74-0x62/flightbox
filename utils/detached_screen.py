@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-"""detached_screen.py: Description of what detached_screen.py does."""
+"""detached_screen.py: Derived screenutils.Screen class that starts screen sessions in detached mode right from the
+beginning."""
 
 from os import system
 from screenutils import Screen

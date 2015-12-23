@@ -26,7 +26,8 @@ __author__ = "Thorsten Biermann"
 __copyright__ = "Copyright 2015, Thorsten Biermann"
 __email__ = "thorsten.biermann@gmail.com"
 
-arg_parser = argparse.ArgumentParser(description='FlightBox collects input from various devices, like GNSS, ADS-B, and combines them in one NMEA stream.')
+
+arg_parser = argparse.ArgumentParser(description='FlightBox collects input from various devices, like GNSS, ADS-B, and combines them in one NMEA (FLARM) data stream.')
 arg_parser.add_argument('--log-file', dest='log_file', help='path to log file')
 arg_parser.set_defaults(log_file='/tmp/flightbox.log')
 args = arg_parser.parse_args()
@@ -34,6 +35,7 @@ args = arg_parser.parse_args()
 
 class LoggingFilter(logging.Filter):
     def filter(self, record):
+        # filter out certain messages
         if record.name.startswith('DataHubWorker'):
             return False
         elif record.name.startswith('InputNetworkSbs1'):
@@ -42,7 +44,7 @@ class LoggingFilter(logging.Filter):
         return True
 
 
-# watchdog initialization procedure
+# initialization procedure
 def flightbox_init():
     global args
     global logging_queue
@@ -107,52 +109,62 @@ def flightbox_main():
     flightbox_logger.info('Entering main procedure')
 
     try:
-        # TODO add main processing
+        # instantiate central data hub queue (used for all data exchange between modules)
         data_hub = Queue()
 
+        # initialize list of sub-processes
         processes = []
 
-        # data hub worker
+        # instantiate data hub worker
         data_hub_worker = DataHubWorker(data_hub)
         processes.append(data_hub_worker)
 
-        """ output modules """
-
+        # instantiate AirConnect (output) module
         air_connect_output = OutputNetworkAirConnect()
         data_hub_worker.add_output_module(air_connect_output)
         processes.append(air_connect_output)
 
-        """ transformation modules """
-
+        # instantiate SBS1/OGN/NMEA to FLARM transformation module
         sbs1ognnmea_to_flarm_transformation = Sbs1OgnNmeaToFlarmTransformation(data_hub)
         data_hub_worker.add_output_module(sbs1ognnmea_to_flarm_transformation)
         processes.append(sbs1ognnmea_to_flarm_transformation)
 
-        """ input modules """
-
+        # instantiate test data (input) module
         # test_data_generator = TestDataGenerator(data_hub)
         # processes.append(test_data_generator)
 
+        # instantiate SBS1 (input) module
         input_network_sbs1 = InputNetworkSbs1(data_hub, '127.0.0.1', 30003, message_types=['1', '2', '3', '4'])
         processes.append(input_network_sbs1)
 
+        # instantiate OGN (input) module
         input_network_ogn = InputNetworkOgnServer(data_hub)
         processes.append(input_network_ogn)
 
-        # input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)
-        input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)
+        # instantiate GNSS (input) module
+        # input_serial_gnss = InputSerialGnss(data_hub, '/dev/cu.usbmodem1411', 9600)    # serial device on Mac OS X
+        input_serial_gnss = InputSerialGnss(data_hub, '/dev/ttyACM0', 9600)    # serial device on Linux
         processes.append(input_serial_gnss)
 
-        # processes need to be started after configuration, as they are executed in separate processes
+        # start all modules in separate processes
+
+        # data hub is first to enable message exchange right from the beginning
         data_hub_worker.start()
+
         time.sleep(1)
+
+        # start output and transformation modules next to avoid losing any message
         air_connect_output.start()
         sbs1ognnmea_to_flarm_transformation.start()
+
         time.sleep(1)
+
+        # start input modules last when all processing modules are ready
         # test_data_generator.start()
         input_network_sbs1.start()
         input_network_ogn.start()
         input_serial_gnss.start()
+
         time.sleep(1)
 
         # wait for data_hub_worker to finish
@@ -168,7 +180,7 @@ def flightbox_main():
                 flightbox_logger.debug('Process ' + process.name + ' already died')
 
 
-# flightbox cleanup procedure
+# cleanup procedure (should be executed before exiting)
 def flightbox_cleanup():
     global logging_queue
     global logging_thread
@@ -199,7 +211,7 @@ if __name__ == "__main__":
     # initialize framework
     flightbox_init()
 
-    # start normally in foreground
+    # execute main function
     flightbox_main()
 
     # clean up framework

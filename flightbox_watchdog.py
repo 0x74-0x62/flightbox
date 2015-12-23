@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-"""flightbox_watchdog.py: Description of what flightbox_watchdog.py does."""
+"""flightbox_watchdog.py: Script that checks if required FlightBox and OGN processes are running and (re-)starts them if required. Can be used to start and monitor FlightBox via a cronjob."""
 
 from os import path
 import psutil

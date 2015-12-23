@@ -10,6 +10,11 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class DataHubWorker(Process):
+    """
+    The DataHubWorker is the central data handling entity that receives DataHubItems from input and transformation
+    modules and forwards them as requested by output and transformation modules.
+    """
+
     def __init__(self, data_hub):
         # call parent constructor
         super().__init__()

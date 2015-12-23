@@ -6,6 +6,10 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class OutputModule(Process):
+    """
+    Generic output module class.
+    """
+
     def __init__(self):
         # call parent constructor
         super().__init__()

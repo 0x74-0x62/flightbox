@@ -11,6 +11,10 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class TestDataGenerator(InputModule):
+    """
+    Input module that generates test data.
+    """
+
     def __init__(self, data_hub):
         # call parent constructor
         super().__init__(data_hub=data_hub)

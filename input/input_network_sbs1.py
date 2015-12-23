@@ -11,6 +11,10 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class NetworkSbs1ClientProtocol(asyncio.Protocol):
+    """
+    SBS1 protocol implementation (client side).
+    """
+
     def __init__(self, loop, data_hub, message_types):
         self._logger = logging.getLogger('InputNetworkSbs1.Client')
         self._logger.debug('Initializing')
@@ -59,6 +63,10 @@ def connect_loop(loop, data_hub, host_name, port, message_types):
 
 
 class InputNetworkSbs1(InputModule):
+    """
+    Input module that connects to ADS-B receiver that has an SBS1 interface, like dump1090.
+    """
+
     def __init__(self, data_hub, host_name, port, message_types = None):
         # call parent constructor
         super().__init__(data_hub=data_hub)

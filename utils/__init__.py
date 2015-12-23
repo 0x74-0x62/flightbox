@@ -1,6 +1,4 @@
-#!/usr/bin/env python
-
-"""__init__.py: Description of what __init__.py does."""
+#!/usr/bin/env python3
 
 __author__ = "Thorsten Biermann"
 __copyright__ = "Copyright 2015, Thorsten Biermann"

@@ -6,6 +6,10 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class InputModule(Process):
+    """
+    Generic input module class.
+    """
+
     def __init__(self, data_hub):
         # call parent constructor
         super().__init__()

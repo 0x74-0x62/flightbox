@@ -12,6 +12,10 @@ __email__ = "thorsten.biermann@gmail.com"
 
 
 class InputSerialGnss(InputModule):
+    """
+    Input module that connects to serial GNSS device to get NMEA position data.
+    """
+
     def __init__(self, data_hub, port, baud_rate):
         # call parent constructor
         super().__init__(data_hub=data_hub)

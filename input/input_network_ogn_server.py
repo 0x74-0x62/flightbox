@@ -31,6 +31,10 @@ def ogn_aprs_heartbeat(loop, clients, clients_lock, server_name, server_software
 
 
 class OgnAprsServerClientProtocol(asyncio.Protocol):
+    """
+    APRS protocol implementation (server side).
+    """
+
     def __init__(self, clients, clients_lock, data_hub, server_name, server_software):
         self._logger = logging.getLogger('OgnAprsServerClientProtocol.Server')
         self._logger.debug('Initializing')
@@ -107,6 +111,11 @@ class OgnAprsServerClientProtocol(asyncio.Protocol):
 
 
 class InputNetworkOgnServer(InputModule):
+    """
+    Input module that emulates an APRS server to which an Open Glider Network (OGN) decoder can connect. The OGN decoder
+    is used to receive FLARM messages.
+    """
+
     def __init__(self, data_hub):
         # call parent constructor
         super().__init__(data_hub=data_hub)
