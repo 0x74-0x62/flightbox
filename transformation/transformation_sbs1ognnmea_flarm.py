@@ -350,6 +350,10 @@ def handle_nmea_data(data, gnss_status, gnss_status_lock):
 def generate_flarm_messages(gnss_status, aircraft):
     logger = logging.getLogger('Sbs1OgnNmeaToFlarmTransformation.FlarmGenerator')
 
+    # define parameter limits (given by FLARM protocol)
+    DISTANCE_M_MIN = -32768
+    DISTANCE_M_MAX = 32767
+
     # initialize message list
     flarm_messages = []
 
@@ -370,14 +374,22 @@ def generate_flarm_messages(gnss_status, aircraft):
         # calculate relative distance (north, east)
         distance_north_m = utils.calculation.distance_north(initial_bearing, distance_m)
         distance_east_m = utils.calculation.distance_east(initial_bearing, distance_m)
-        relative_north = '{:.0f}'.format(min(max(distance_north_m, -32768), 32767))
-        relative_east = '{:.0f}'.format(min(max(distance_east_m, -32768), 32767))
+
+        # skip aircraft if distance is out of limits
+        if not (distance_north_m >= DISTANCE_M_MIN and distance_north_m <= DISTANCE_M_MAX):
+            return None
+        if not (distance_east_m >= DISTANCE_M_MIN and distance_east_m <= DISTANCE_M_MAX):
+            return None
+
+        # set relative distance
+        relative_north = '{:.0f}'.format(min(max(distance_north_m, DISTANCE_M_MIN), DISTANCE_M_MAX))
+        relative_east = '{:.0f}'.format(min(max(distance_east_m, DISTANCE_M_MIN), DISTANCE_M_MAX))
 
         logger.debug('{}: dist={:.0f} m, initial_bearing={:.0f} deg, final_bearing={:.0f} deg, dist_n={:.0f} m, dist_e={:.0f} m'.format(aircraft.identifier, distance_m, initial_bearing, final_bearing, distance_north_m, distance_east_m))
 
         relative_vertical = ''
         if gnss_status.altitude and aircraft.altitude:
-            relative_vertical = '{:.0f}'.format(min(max(utils.conversion.feet_to_meters(aircraft.altitude - gnss_status.altitude), -32768), 32767))
+            relative_vertical = '{:.0f}'.format(min(max(utils.conversion.feet_to_meters(aircraft.altitude - gnss_status.altitude), DISTANCE_M_MIN), DISTANCE_M_MAX))
 
         # indicate ICAO identifier
         identifier_type = '1'
