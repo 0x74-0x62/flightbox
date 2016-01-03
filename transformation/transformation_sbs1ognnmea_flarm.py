@@ -255,11 +255,12 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
                     error_count = int(error_count_match.group(1))
 
                 elif coordinates_extension_match is not None:
-                    dlat = int(coordinates_extension_match.group(1)) / 1000
-                    dlon = int(coordinates_extension_match.group(2)) / 1000
+                    # position precision enhancement is third decimal digit of minute
+                    lat_delta_degrees = int(coordinates_extension_match.group(1)) / 1000.0 / 60.0
+                    lon_delta_degrees = int(coordinates_extension_match.group(2)) / 1000.0 / 60.0
 
-                    latitude += dlat
-                    longitude += dlon
+                    latitude += lat_delta_degrees
+                    longitude += lon_delta_degrees
 
                     # save data
                     aircraft[identifier].latitude = utils.calculation.lat_abs_from_rel_flarm_coordinate(gnss_status.latitude, latitude)
