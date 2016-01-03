@@ -183,7 +183,7 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
             else:
                 logger.warn('Problem parsing OGN beacon data: {}'.format(beacon_data))
 
-            # compile matching patterns
+            # compile matching patterns: FLARM data
             address_pattern = re.compile(r"id(\S{2})(\S{6})")
             climb_rate_pattern = re.compile(r"([\+\-]\d+)fpm")
             turn_rate_pattern = re.compile(r"([\+\-]\d+\.\d+)rot")
@@ -197,6 +197,14 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
             hardware_version_pattern = re.compile(r"h(\d+)")
             real_id_pattern = re.compile(r"r(\w{6})")
             flightlevel_pattern = re.compile(r"FL(\d{3}\.\d{2})")
+
+            # compile matching patterns: receiver beacon data
+            ogn_decode_version_pattern = re.compile(r"v(\d\.\d\.\d\.\w+)")
+            load_pattern = re.compile(r"CPU:([\d\.]+)")
+            ram_pattern = re.compile(r"RAM:([\d\.]+)/([\d\.]+)(\w+)")
+            ntp_pattern = re.compile(r"NTP:([\d\.-]+)ms/([\d\.-]+)ppm")
+            temperature_pattern = re.compile(r"([\d\.+-]+)C")
+            rf_pattern = re.compile(r"RF:([\w\d\.+-/]+)")
 
             for position_data_part in position_data:
                 address_match = address_pattern.match(position_data_part)
@@ -212,6 +220,13 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
                 hardware_version_match = hardware_version_pattern.match(position_data_part)
                 real_id_match = real_id_pattern.match(position_data_part)
                 flightlevel_match = flightlevel_pattern.match(position_data_part)
+
+                ogn_decode_version_match = ogn_decode_version_pattern.match(position_data_part)
+                load_match = load_pattern.match(position_data_part)
+                ram_match = ram_pattern.match(position_data_part)
+                ntp_match = ntp_pattern.match(position_data_part)
+                temperature_match = temperature_pattern.match(position_data_part)
+                rf_match = rf_pattern.match(position_data_part)
 
                 if address_match is not None:
                     # Flarm ID type byte in APRS msg: PTTT TTII
@@ -272,11 +287,33 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
                 elif flightlevel_match is not None:
                     flightlevel = float(flightlevel_match.group(1))
 
+                elif ogn_decode_version_match is not None:
+                    ogn_decode_version = ogn_decode_version_match.group(1)
+
+                elif load_match is not None:
+                    load = float(load_match.group(1))
+
+                elif ram_match is not None:
+                    ram_used = float(ram_match.group(1))
+                    ram_total = float(ram_match.group(2))
+                    ram_unit = ram_match.group(3)
+
+                elif ntp_match is not None:
+                    ntp_offset_ms = float(ntp_match.group(1))
+                    ntp_update_rate_ppm = float(ntp_match.group(2))
+
+                elif temperature_match is not None:
+                    temperature_celsius = float(temperature_match.group(1))
+
+                elif rf_match is not None:
+                    rf_info = rf_match.group(1)
+
                 else:
                     logger.warn('Problem parsing OGN position data ({}): {}'.format(position_data_part, position_data))
 
         except ValueError:
             logger.warn('Problem during OGN data parsing')
+            logger.exception(sys.exc_info()[0])
         except:
             logger.exception(sys.exc_info()[0])
 
