@@ -84,3 +84,68 @@ def relative_bearing(absolute_bearing, course):
         result = relative_bearing_360 + 360.0
 
     return result
+
+
+def lat_abs_from_rel_flarm_coordinate(abs_location_coordinate, rel_flarm_coordinate):
+    """
+    :param abs_location_coordinate: See function abs_from_rel_flarm_coordinate
+    :param rel_flarm_coordinate: See function abs_from_rel_flarm_coordinate
+    :return: See function abs_from_rel_flarm_coordinate
+    """
+    return abs_from_rel_flarm_coordinate(abs_location_coordinate, rel_flarm_coordinate, 19)
+
+
+def lon_abs_from_rel_flarm_coordinate(abs_location_coordinate, rel_flarm_coordinate):
+    """
+    :param abs_location_coordinate: See function abs_from_rel_flarm_coordinate
+    :param rel_flarm_coordinate: See function abs_from_rel_flarm_coordinate
+    :return: See function abs_from_rel_flarm_coordinate
+    """
+    return abs_from_rel_flarm_coordinate(abs_location_coordinate, rel_flarm_coordinate, 20)
+
+
+def abs_from_rel_flarm_coordinate(abs_location_coordinate, rel_flarm_coordinate, data_bit_width):
+    """
+    :param abs_location_coordinate: Absolute coordinate of FLARM receivers's location in degrees
+    :param rel_flarm_coordinate: Relative coordinate as returned by ogn-decode in degrees (assuming receiver location has been configured to 0)
+    :param data_bit_width: Bit width of FLARM position data (should be 19 for latitude and 20 for longitude)
+    :return: Absolute FLARM coordinate in degrees
+    """
+
+    # set FLARM constants
+    INT_CONVERSION_FACTOR = 1e7
+    LSB_TRUNCATION_BIT_WIDTH = 7
+
+    # convert degrees to integer representation: limit decimal places according to INT_CONVERSION_FACTOR
+    abs_location_coordinate_int = int(abs_location_coordinate * INT_CONVERSION_FACTOR)
+    rel_flarm_coordinate_int = int(rel_flarm_coordinate * INT_CONVERSION_FACTOR)
+
+    # check if two's complement representation has to be calculated
+    if rel_flarm_coordinate_int < 0:
+        # remove truncated LSBs of relative FLARM position (shift right by LSB_TRUNCATION_BIT_WIDTH bits)
+        rel_flarm_coordinate_int = int(rel_flarm_coordinate_int / (2 ** LSB_TRUNCATION_BIT_WIDTH))
+
+        # calculate two's complement representation
+        rel_flarm_coordinate_int = (2 ** data_bit_width) - abs(rel_flarm_coordinate_int)
+
+        # add truncated LSBs again to relative FLARM position (shift left by LSB_TRUNCATION_BIT_WIDTH bits)
+        rel_flarm_coordinate_int = int(rel_flarm_coordinate_int * (2 ** LSB_TRUNCATION_BIT_WIDTH))
+
+    # truncate both coordinates
+    abs_location_coordinate_int_truncated = int(abs_location_coordinate_int / (2 ** LSB_TRUNCATION_BIT_WIDTH))
+    rel_flarm_coordinate_int_truncated = int(rel_flarm_coordinate_int / (2 ** LSB_TRUNCATION_BIT_WIDTH))
+
+    # calculate difference of relative parts of both coordinates (difference of relative part only ensured by bit-wise AND operation)
+    delta_rel_flarm_to_location_truncated = (rel_flarm_coordinate_int_truncated - abs_location_coordinate_int_truncated) & ((2 ** data_bit_width) - 1)
+
+    # check if delta is larger than center of current "FLARM sector" and hence needs to be wrapped
+    if delta_rel_flarm_to_location_truncated >= (2 ** (data_bit_width - 1)):
+        delta_rel_flarm_to_location_truncated -= (2 ** data_bit_width)
+
+    # calculate absolute FLARM position
+    abs_flarm_coordinate_int = (abs_location_coordinate_int_truncated + delta_rel_flarm_to_location_truncated) * (2 ** LSB_TRUNCATION_BIT_WIDTH)
+
+    # convert back to degrees
+    abs_flarm_coordinate = abs_flarm_coordinate_int / INT_CONVERSION_FACTOR
+
+    return abs_flarm_coordinate
