@@ -131,7 +131,7 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
             beacon_data = data_parts[0]
 
             # get remaining parts
-            position_data = data_parts[1:-1]
+            position_data = data_parts[1:len(data_parts)]
 
             m = re.match(r"^(.+?)>APRS,(.+?):/(\d{6})+h(\d{4}\.\d{2})(N|S)(.)(\d{5}\.\d{2})(E|W)(.)((\d{3})/(\d{3}))?/A=(\d{6})", beacon_data)
             if m:
