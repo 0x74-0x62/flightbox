@@ -118,7 +118,7 @@ def handle_sbs1_data(data, aircraft, aircraft_lock):
 def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
     logger = logging.getLogger('Sbs1OgnNmeaToFlarmTransformation.OgnHandler')
 
-    logger.info('Processing OGN data: {}'.format(data))
+    logger.debug('Processing OGN data: {}'.format(data))
 
     # check if own location is known (required for FLARM position calculation)
     if gnss_status.longitude and gnss_status.latitude:
@@ -162,8 +162,6 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
                 altitude = int(m.group(13))
 
                 if not identifier == 'FlightBox':
-                    logger.info('{}: lat={}, lon={}, alt={}, course={:d}, h_speed={:d}'.format(identifier, latitude, longitude, altitude, track, h_speed))
-
                     with aircraft_lock:
                         # initialize empty AircraftInfo object if required
                         if identifier not in aircraft.keys():
@@ -177,6 +175,9 @@ def handle_ogn_data(data, aircraft, aircraft_lock, gnss_status):
                         aircraft[identifier].altitude = altitude
                         aircraft[identifier].h_speed = h_speed
                         aircraft[identifier].course = track
+
+                    logger.debug('{}: lat={}, lon={}, alt={}, course={:d}, h_speed={:d}'.format(identifier, aircraft[identifier].latitude, aircraft[identifier].longitude, aircraft[identifier].altitude, aircraft[identifier].course, aircraft[identifier].h_speed))
+
                 else:
                     logger.debug('Discarding receiver beacon')
 
@@ -329,7 +330,6 @@ def handle_nmea_data(data, gnss_status, gnss_status_lock):
             message = pynmea2.parse(data)
 
             logger.debug('GPGGA: lat={} {}, lon={} {}, alt={} {}, qual={:d}, n_sat={}, h_dop={}, geoidal_sep={} {}'.format(message.lat, message.lat_dir, message.lon, message.lon_dir, message.altitude, message.altitude_units, message.gps_qual, message.num_sats, message.horizontal_dil, message.geo_sep, message.geo_sep_units))
-            # logger.info('GPGGA: lat={} {}, lon={} {}, alt={} {}, qual={:d}, n_sat={}, h_dop={}, geoidal_sep={} {}, dgps_id={}, dgps_age={}'.format(message.lat, message.lat_dir, message.lon, message.lon_dir, message.altitude, message.altitude_units, message.gps_qual, message.num_sats, message.horizontal_dil, message.geo_sep, message.geo_sep_units, message.ref_station_id, message.age_gps_data))
 
             with gnss_status_lock:
                 lat = utils.conversion.nmea_coord_to_degrees(float(message.lat))
